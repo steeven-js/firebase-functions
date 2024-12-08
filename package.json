@@ -19,5 +19,8 @@
   "description": "",
   "devDependencies": {
     "firebase-tools": "^13.28.0"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.1"
   }
 }
