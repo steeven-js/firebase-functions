@@ -74,18 +74,27 @@ export const getScheduledEvents = onRequest(async (req, res) => {
 });
 
 // Passe l'event programmé ed false à true quand heure de l'event est atteinte
-// export const scheduleEvent = onRequest(async (req, res) => {
-//     const eventId = req.query.eventId;
-//     const eventRef = getFirestore().collection("events").doc(eventId);
-//     const event = await eventRef.get();
-//     if (!event.exists) {
-//         res.status(404).json({ error: "Event not found" });
-//         return;
-//     }
-//     if (event.data().scheduledAt.toDate() > new Date()) {
-//         res.status(400).json({ error: "Event not scheduled yet" });
-//         return;
-//     }
-//     await eventRef.update({ scheduled: true });
-//     res.json({ result: `Event ${eventId} scheduled` });
-// });
+export const scheduleEvent = onRequest(async (req, res) => {
+    const eventId = req.query.eventId;
+    const eventRef = getFirestore().collection("events").doc(eventId);
+    const event = await eventRef.get();
+    if (!event.exists) {
+        res.status(404).json({ error: "Event not found" });
+        return;
+    }
+    if (event.data().isScheduledDate.toDate() > new Date()) {
+        res.status(400).json({ error: "Event not scheduled yet" });
+        return;
+    }
+
+    if (event.data().isScheduledDate.toDate() === new Date()) {    
+        // Passer isActive à true
+        await eventRef.update({ isActive: true });
+
+        // Retour de la réponse
+        res.json({ result: `Event ${eventId} started` });
+    }
+
+    await eventRef.update({ scheduled: true });
+    res.json({ result: `Event ${eventId} scheduled` });
+});
