@@ -40,3 +40,52 @@ export const makeuppercase = onDocumentCreated("/messages/{documentId}", (event)
     // La définition d'un champ 'uppercase' dans le document Firestore retourne une Promesse.
     return event.data.ref.set({ uppercase }, { merge: true });
 });
+
+/**
+ *  Madinia - Cloud functions
+ */
+
+// Récupère les events programmés 
+export const getScheduledEvents = onRequest(async (req, res) => {
+    try {
+        // Récupération des événements programmés
+        const eventsRef = getFirestore().collection("events");
+        const snapshot = await eventsRef.where("isScheduledDate", "==", true).get();
+
+        // Transformation des documents en incluant leur ID
+        const events = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data()
+        }));
+
+        // Retour de la réponse
+        res.status(200).json({ 
+            success: true,
+            events 
+        });
+
+    } catch (error) {
+        // En cas d'erreur
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Passe l'event programmé ed false à true quand heure de l'event est atteinte
+// export const scheduleEvent = onRequest(async (req, res) => {
+//     const eventId = req.query.eventId;
+//     const eventRef = getFirestore().collection("events").doc(eventId);
+//     const event = await eventRef.get();
+//     if (!event.exists) {
+//         res.status(404).json({ error: "Event not found" });
+//         return;
+//     }
+//     if (event.data().scheduledAt.toDate() > new Date()) {
+//         res.status(400).json({ error: "Event not scheduled yet" });
+//         return;
+//     }
+//     await eventRef.update({ scheduled: true });
+//     res.json({ result: `Event ${eventId} scheduled` });
+// });
