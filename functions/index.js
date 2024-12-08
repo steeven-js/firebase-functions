@@ -1,13 +1,11 @@
 import * as v2 from 'firebase-functions/v2';
 
-type Indexable = { [key: string]: any };
-
 export const helloWorld = v2.https.onRequest((request, response) => {
     // Extract the parameter from the URL path
     const name = request.path.split('/').pop();
 
     // Define the items object
-    const items: Indexable = {
+    const items = {
         lamp: 'This is a lamp',
         table: 'This is a table',
     };
