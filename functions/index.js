@@ -1,52 +1,61 @@
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions";
-import { onRequest } from "firebase-functions/v2/https";
 import { initializeApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 
 initializeApp();
 
-export const triggerEvent = onRequest(async (req, res) => {
+/**
+ * Cloud Function qui s'exécute toutes les 30 minutes pour vérifier et activer 
+ * les événements programmés dont la date est arrivée.
+ * Coût estimé : ~1 440 exécutions par mois
+ */
+export const checkScheduledEvents = onSchedule("every 30 minutes", async (event) => {
+    const db = getFirestore();
+    const now = Timestamp.now();
+
     try {
-        const { firebaseId, updates } = req.body;
+        logger.info('Starting scheduled event check:', now.toDate());
 
-        if (!firebaseId || !updates) {
-            res.status(400).json({ error: 'firebaseId and updates are required' });
-            return;
+        const eventsRef = db.collection('events');
+        const snapshot = await eventsRef
+            .where('isScheduledDate', '==', true)
+            .where('status', '==', 'pending')
+            .get();
+
+        const batch = db.batch();
+        let updateCount = 0;
+
+        for (const doc of snapshot.docs) {
+            const event = doc.data();
+            const scheduledDate = new Date(event.scheduledDate);
+
+            // Vérifier si la date programmée est passée
+            if (scheduledDate <= now.toDate()) {
+                const eventRef = eventsRef.doc(doc.id);
+                batch.update(eventRef, {
+                    status: 'current',
+                    _activatedAt: now,
+                    _lastChecked: now,
+                    isActive: true
+                });
+
+                logger.info(`Scheduling activation for event: ${doc.id}, scheduled for: ${event.scheduledDate}`);
+                updateCount++;
+            }
         }
 
-        // Valider les champs de mise à jour attendus
-        const expectedFields = ['status', 'isActive', 'lastUpdated'];
-        const missingFields = expectedFields.filter(field => updates[field] === undefined);
-
-        if (missingFields.length > 0) {
-            res.status(400).json({ 
-                error: `Missing required fields in updates: ${missingFields.join(', ')}` 
-            });
-            return;
+        // Exécuter les mises à jour en batch si nécessaire
+        if (updateCount > 0) {
+            await batch.commit();
+            logger.info(`Successfully updated ${updateCount} events to current status`);
+        } else {
+            logger.info('No events needed updating at this time');
         }
 
-        // Mettre à jour le document dans Firestore avec les valeurs reçues
-        const eventRef = getFirestore()
-            .collection('events')
-            .doc(firebaseId);
-
-        // Convertir la date en objet Date Firebase
-        const firestoreUpdates = {
-            status: updates.status,
-            isActive: updates.isActive,
-            lastUpdated: new Date(updates.lastUpdated)
-        };
-
-        await eventRef.update(firestoreUpdates);
-
-        logger.log(`Event ${firebaseId} has been updated with:`, firestoreUpdates);
-        res.json({ 
-            success: true, 
-            message: `Event ${firebaseId} has been updated`,
-            updates: firestoreUpdates
-        });
+        return null;
     } catch (error) {
-        logger.error('Error processing event:', error);
-        res.status(500).json({ error: error.message });
+        logger.error('Error checking scheduled events:', error);
+        throw new Error(`Failed to process scheduled events: ${error.message}`);
     }
 });
